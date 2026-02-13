@@ -125,7 +125,7 @@ meta_advertiser_name = st.text_input("Enter Advertiser Name", "", key="meta_adve
 
 @st.cache_data(ttl=86400)
 def fetch_meta_ads(advertiser_name):
-    meta_access_token = "EAAQreVTavvABQpTrtyGA56pDl1ylcK51AIgFeLCOLaZBkx4jkJAZAlsFMJZClDhDmgNuWKBSYZBJMbPrWH7waoy2WusMR1UAgL2Y3LQWHi7Dk89jFmc7zby5ToqevahSO7kfR15pZAJSm9tl3hVH82rZCgzh9yRfcQRvzLmlb7hO1deORIjwpZAgWoLMw1lSeZC3Vvfk0dIi1kdg"
+    meta_access_token = st.secrets["meta_access_token"]
 
     base_url = "https://graph.facebook.com/v17.0/ads_archive"
     fields = (
