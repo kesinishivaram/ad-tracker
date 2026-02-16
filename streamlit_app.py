@@ -5,6 +5,7 @@ import pandas as pd
 import requests
 import time
 import json
+import re
 from x_ads_scraper import download_and_extract_csv, filter_by_advertiser, standardize_columns, expand_geography_search
 
 st.set_page_config(layout="wide")
@@ -286,7 +287,6 @@ def fetch_meta_ads(advertiser_name, geography=""):
 
             if geography:
                 expanded_geo = expand_geography_search(geography)
-                import re
                 if not any(re.search(expanded_geo, region, re.IGNORECASE) for region in regions):
                     continue
 
@@ -372,7 +372,6 @@ def fetch_x_ads(advertiser_name, geography=""):
         
         if geography and "Geography Targeting" in df.columns:
             expanded_geo = expand_geography_search(geography)
-            import re
             df = df[df["Geography Targeting"].astype(str).str.contains(expanded_geo, case=False, na=False, regex=True)]
         
         if 'Start Date' in df.columns:
