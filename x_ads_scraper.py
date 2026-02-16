@@ -10,6 +10,22 @@ logger = logging.getLogger(__name__)
 
 X_DATA_BASE_URL = "https://business.x.com/content/dam/business-twitter/political-ads-data"
 
+STATE_MAPPING = {
+    'al': 'alabama', 'ak': 'alaska', 'az': 'arizona', 'ar': 'arkansas',
+    'ca': 'california', 'co': 'colorado', 'ct': 'connecticut', 'de': 'delaware',
+    'fl': 'florida', 'ga': 'georgia', 'hi': 'hawaii', 'id': 'idaho',
+    'il': 'illinois', 'in': 'indiana', 'ia': 'iowa', 'ks': 'kansas',
+    'ky': 'kentucky', 'la': 'louisiana', 'me': 'maine', 'md': 'maryland',
+    'ma': 'massachusetts', 'mi': 'michigan', 'mn': 'minnesota', 'ms': 'mississippi',
+    'mo': 'missouri', 'mt': 'montana', 'ne': 'nebraska', 'nv': 'nevada',
+    'nh': 'new hampshire', 'nj': 'new jersey', 'nm': 'new mexico', 'ny': 'new york',
+    'nc': 'north carolina', 'nd': 'north dakota', 'oh': 'ohio', 'ok': 'oklahoma',
+    'or': 'oregon', 'pa': 'pennsylvania', 'ri': 'rhode island', 'sc': 'south carolina',
+    'sd': 'south dakota', 'tn': 'tennessee', 'tx': 'texas', 'ut': 'utah',
+    'vt': 'vermont', 'va': 'virginia', 'wa': 'washington', 'wv': 'west virginia',
+    'wi': 'wisconsin', 'wy': 'wyoming', 'dc': 'district of columbia'
+}
+
 
 def generate_possible_dates(days_back=7):
     dates = []
@@ -86,21 +102,43 @@ def download_and_extract_csv():
         raise
 
 
-def filter_by_advertiser(df, advertiser_name):
-    if not advertiser_name:
+def filter_by_advertiser(df, keyword):
+    if not keyword:
         return df
     
-    screen_name_columns = [col for col in df.columns if 'screen' in col.lower() or 'name' in col.lower()]
+    search_columns = [col for col in df.columns if col.lower() in [
+        'advertiser name', 'screen name', 'ad type', 'ad id', 'ad url'
+    ]]
     
-    if not screen_name_columns:
-        logger.warning("Could not find screen name column. Available columns: " + str(df.columns.tolist()))
+    if not search_columns:
+        logger.warning("Could not find searchable columns. Available columns: " + str(df.columns.tolist()))
         return df
     
-    screen_name_col = screen_name_columns[0]
+    mask = False
+    for col in search_columns:
+        if col in df.columns:
+            mask = mask | df[col].astype(str).str.lower().str.contains(keyword.lower(), na=False)
     
-    filtered_df = df[df[screen_name_col].str.lower().str.contains(advertiser_name.lower(), na=False)]
+    filtered_df = df[mask]
     
     return filtered_df
+
+
+def expand_geography_search(geography_query):
+    if not geography_query:
+        return geography_query
+    
+    query_lower = geography_query.lower().strip()
+    
+    if query_lower in STATE_MAPPING:
+        full_name = STATE_MAPPING[query_lower]
+        return f"({query_lower}|{full_name})"
+    
+    for abbr, full_name in STATE_MAPPING.items():
+        if query_lower == full_name:
+            return f"({abbr}|{full_name})"
+    
+    return geography_query
 
 
 def standardize_columns(df):

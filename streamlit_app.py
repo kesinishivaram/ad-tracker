@@ -5,7 +5,7 @@ import pandas as pd
 import requests
 import time
 import json
-from x_ads_scraper import download_and_extract_csv, filter_by_advertiser, standardize_columns
+from x_ads_scraper import download_and_extract_csv, filter_by_advertiser, standardize_columns, expand_geography_search
 
 st.set_page_config(layout="wide")
 
@@ -18,11 +18,16 @@ credentials = service_account.Credentials.from_service_account_info(
 )
 client = bigquery.Client(credentials=credentials)
 
-advertiser_name = st.text_input("Enter Advertiser Name", "")
+search_cols = st.columns([1, 1])
+with search_cols[0]:
+    advertiser_name = st.text_input("Search by Keyword", "")
+with search_cols[1]:
+    google_geo = st.text_input("Search by Geography", "")
 
 
 @st.cache_data(ttl=86400)
-def run_query(advertiser_name):
+def run_query(advertiser_name, geography=""):
+    expanded_geography = expand_geography_search(geography)
 
     query = """
     WITH advertiser_base AS (
@@ -49,6 +54,7 @@ def run_query(advertiser_name):
         age_targeting,
         gender_targeting
       FROM `bigquery-public-data.google_political_ads.creative_stats`
+      WHERE (@geography = "" OR REGEXP_CONTAINS(LOWER(geo_targeting_included), LOWER(@geography)))
     )
 
     SELECT
@@ -73,6 +79,9 @@ def run_query(advertiser_name):
         query_parameters=[
             bigquery.ScalarQueryParameter(
                 "advertiser_name", "STRING", f"%{advertiser_name}%"
+            ),
+            bigquery.ScalarQueryParameter(
+                "geography", "STRING", expanded_geography
             ),
         ]
     )
@@ -100,33 +109,91 @@ def run_query(advertiser_name):
     return df
 
 
-if advertiser_name:
-    with st.spinner("Fetching advertiser data..."):
-        df = run_query(advertiser_name)
+def apply_simple_filters(df, prefix):
+    if df is None or df.empty:
+        return df
 
+    if "Spend" in df.columns:
+        df = df.copy()
+        df["Spend"] = pd.to_numeric(df["Spend"], errors="coerce").fillna(0)
+    else:
+        df = df.copy()
+
+    cols = st.columns([1, 1, 1])
+    with cols[0]:
+        min_spend = st.number_input("Min Spend (USD)", min_value=0.0, value=0.0, format="%.2f", key=f"{prefix}_min_spend")
+    with cols[1]:
+        max_default = float(df["Spend"].max()) if "Spend" in df.columns and not df["Spend"].empty else 0.0
+        max_spend = st.number_input("Max Spend (USD)", min_value=0.0, value=max_default, format="%.2f", key=f"{prefix}_max_spend")
+    with cols[2]:
+        keyword = st.text_input("Keyword (Ad Url / Ad Type / Advertiser)", key=f"{prefix}_keyword")
+
+    advertisers = []
+    if "Advertiser Name" in df.columns:
+        advertisers = sorted(df["Advertiser Name"].dropna().unique().tolist())
+    adv_sel = st.multiselect("Advertiser", advertisers, key=f"{prefix}_adv_sel")
+
+    filtered = df
+    if "Spend" in filtered.columns:
+        filtered = filtered[(filtered["Spend"] >= float(min_spend)) & (filtered["Spend"] <= float(max_spend))]
+    if adv_sel:
+        filtered = filtered[filtered.get("Advertiser Name", "").isin(adv_sel)]
+    if keyword:
+        mask = (
+            filtered.get("Ad Url", "").astype(str).str.contains(keyword, case=False, na=False)
+            | filtered.get("Ad Type", "").astype(str).str.contains(keyword, case=False, na=False)
+            | filtered.get("Advertiser Name", "").astype(str).str.contains(keyword, case=False, na=False)
+        )
+        filtered = filtered[mask]
+
+    return filtered
+
+
+if advertiser_name or google_geo:
+    with st.spinner("Fetching advertiser data..."):
+        df = run_query(advertiser_name, google_geo)
     if not df.empty:
         st.success(f"Returned {len(df)} records")
-        st.dataframe(df, column_config={
-            "Ad Url": st.column_config.LinkColumn()
-        }, use_container_width=True, height=400)
 
-        csv = df.to_csv(index=False).encode("utf-8")
+        st.markdown("**Filters (Google)**")
+        df_filtered = apply_simple_filters(df, "google")
 
-        st.download_button(
-            label="Download CSV",
-            data=csv,
-            file_name=f"{advertiser_name}_google_ads.csv",
-            mime="text/csv",
-        )
+        if df_filtered is None or df_filtered.empty:
+            st.warning("No results match the filters")
+        else:
+            st.markdown(f"**Showing {len(df_filtered)} of {len(df)} records**")
+            st.dataframe(df_filtered, column_config={
+                "Ad Url": st.column_config.LinkColumn()
+            }, use_container_width=True, height=400)
+
+            csv = df_filtered.to_csv(index=False).encode("utf-8")
+            st.download_button(
+                label="Download Filtered CSV",
+                data=csv,
+                file_name=f"google_ads_filtered.csv",
+                mime="text/csv",
+            )
+
+            csv_full = df.to_csv(index=False).encode("utf-8")
+            st.download_button(
+                label="Download Full CSV",
+                data=csv_full,
+                file_name=f"google_ads_full.csv",
+                mime="text/csv",
+            )
     else:
         st.warning("No results found.")
 
 st.markdown("<h2 style='text-align: left;'><span style='color: #0084F3;'>M</span><span style='color: #0084F3;'>e</span><span style='color: #0084F3;'>t</span><span style='color: #0084F3;'>a</span></h2>", unsafe_allow_html=True)
 
-meta_advertiser_name = st.text_input("Enter Advertiser Name", "", key="meta_advertiser")
+meta_cols = st.columns([1, 1])
+with meta_cols[0]:
+    meta_advertiser_name = st.text_input("Search by Keyword", "", key="meta_advertiser")
+with meta_cols[1]:
+    meta_geo = st.text_input("Search by Geography", "", key="meta_geo")
 
 @st.cache_data(ttl=86400)
-def fetch_meta_ads(advertiser_name):
+def fetch_meta_ads(advertiser_name, geography=""):
     meta_access_token = st.secrets["meta_access_token"]
 
     base_url = "https://graph.facebook.com/v17.0/ads_archive"
@@ -217,6 +284,12 @@ def fetch_meta_ads(advertiser_name):
                 regions = [region.get("region", "") for region in delivery_by_region if isinstance(region, dict)]
                 geo_targeting = ", ".join(regions) if regions else ""
 
+            if geography:
+                expanded_geo = expand_geography_search(geography)
+                import re
+                if not any(re.search(expanded_geo, region, re.IGNORECASE) for region in regions):
+                    continue
+
             row = {
                 "Advertiser Name": ad.get("page_name") or advertiser_name,
                 "Ad Id": ad.get("id", ""),
@@ -243,40 +316,64 @@ def fetch_meta_ads(advertiser_name):
         st.error(f"Error fetching Meta ads: {e}")
         return pd.DataFrame()
 
-if meta_advertiser_name:
+if meta_advertiser_name or meta_geo:
     with st.spinner("Fetching Meta advertiser data..."):
-        df_meta = fetch_meta_ads(meta_advertiser_name)
+        df_meta = fetch_meta_ads(meta_advertiser_name, meta_geo)
     
     if not df_meta.empty:
         st.success(f"Returned {len(df_meta)} records")
         df_meta = df_meta.sort_values("Start Date", ascending=False)
-        st.dataframe(df_meta, column_config={
-            "Ad Url": st.column_config.LinkColumn()
-        }, use_container_width=True, height=400)
-        
-        csv = df_meta.to_csv(index=False).encode("utf-8")
-        st.download_button(
-            label="Download CSV",
-            data=csv,
-            file_name=f"{meta_advertiser_name}_meta_political_ads.csv",
-            mime="text/csv",
-        )
+        st.markdown("**Filters (Meta)**")
+        df_meta_filtered = apply_simple_filters(df_meta, "meta")
+
+        if df_meta_filtered is None or df_meta_filtered.empty:
+            st.warning("No results match the filters")
+        else:
+            st.markdown(f"**Showing {len(df_meta_filtered)} of {len(df_meta)} records**")
+            st.dataframe(df_meta_filtered, column_config={
+                "Ad Url": st.column_config.LinkColumn()
+            }, use_container_width=True, height=400)
+
+            csv = df_meta_filtered.to_csv(index=False).encode("utf-8")
+            st.download_button(
+                label="Download Filtered CSV",
+                data=csv,
+                file_name=f"meta_political_ads_filtered.csv",
+                mime="text/csv",
+            )
+
+            csv_full = df_meta.to_csv(index=False).encode("utf-8")
+            st.download_button(
+                label="Download Full CSV",
+                data=csv_full,
+                file_name=f"meta_political_ads_full.csv",
+                mime="text/csv",
+            )
     else:
         st.warning("No results found.")
 
 
 st.header("X")
 
-x_advertiser_name = st.text_input("Enter Advertiser Name", "", key="x_advertiser")
+x_cols = st.columns([1, 1])
+with x_cols[0]:
+    x_advertiser_name = st.text_input("Search by Keyword", "", key="x_advertiser")
+with x_cols[1]:
+    x_geo = st.text_input("Search by Geography", "", key="x_geo")
 
 @st.cache_data(ttl=86400)
-def fetch_x_ads(advertiser_name):
+def fetch_x_ads(advertiser_name, geography=""):
     try:
         df = download_and_extract_csv()
         df = standardize_columns(df)
         
         if advertiser_name:
             df = filter_by_advertiser(df, advertiser_name)
+        
+        if geography and "Geography Targeting" in df.columns:
+            expanded_geo = expand_geography_search(geography)
+            import re
+            df = df[df["Geography Targeting"].astype(str).str.contains(expanded_geo, case=False, na=False, regex=True)]
         
         if 'Start Date' in df.columns:
             try:
@@ -291,24 +388,38 @@ def fetch_x_ads(advertiser_name):
         st.error(f"Error fetching X political ads data: {e}")
         return pd.DataFrame()
 
-if x_advertiser_name:
+if x_advertiser_name or x_geo:
     with st.spinner("Fetching X advertiser data..."):
-        df_x_filtered = fetch_x_ads(x_advertiser_name)
+        df_x_filtered = fetch_x_ads(x_advertiser_name, x_geo)
     
     if not df_x_filtered.empty:
         st.success(f"Returned {len(df_x_filtered)} records")
-        
-        st.dataframe(df_x_filtered, column_config={
-            "Ad Url": st.column_config.LinkColumn()
-        }, use_container_width=True, height=400)
-        
-        csv = df_x_filtered.to_csv(index=False).encode("utf-8")
-        st.download_button(
-            label="Download CSV",
-            data=csv,
-            file_name=f"{x_advertiser_name}_x_political_ads.csv",
-            mime="text/csv",
-        )
+        st.markdown("**Filters (X)**")
+        df_x_display = apply_simple_filters(df_x_filtered, "x")
+
+        if df_x_display is None or df_x_display.empty:
+            st.warning("No results match the filters")
+        else:
+            st.markdown(f"**Showing {len(df_x_display)} of {len(df_x_filtered)} records**")
+            st.dataframe(df_x_display, column_config={
+                "Ad Url": st.column_config.LinkColumn()
+            }, use_container_width=True, height=400)
+
+            csv = df_x_display.to_csv(index=False).encode("utf-8")
+            st.download_button(
+                label="Download Filtered CSV",
+                data=csv,
+                file_name=f"x_political_ads_filtered.csv",
+                mime="text/csv",
+            )
+
+            csv_full = df_x_filtered.to_csv(index=False).encode("utf-8")
+            st.download_button(
+                label="Download Full CSV",
+                data=csv_full,
+                file_name=f"x_political_ads_full.csv",
+                mime="text/csv",
+            )
     else:
         st.warning("No X political ads found for this advertiser. Data is updated every 2 days from X's official disclosure page.")
 
