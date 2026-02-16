@@ -7,6 +7,8 @@ import time
 import json
 from x_ads_scraper import download_and_extract_csv, filter_by_advertiser, standardize_columns
 
+st.set_page_config(layout="wide")
+
 st.markdown("<h1 style='text-align: center;'>Political Ads Tracker</h1>", unsafe_allow_html=True)
 
 st.markdown("<h2 style='text-align: left;'><span style='color: #4285F4;'>G</span><span style='color: #EA4335;'>o</span><span style='color: #FBBC05;'>o</span><span style='color: #4285F4;'>g</span><span style='color: #EA4335;'>l</span><span style='color: #FBBC05;'>e</span></h2>", unsafe_allow_html=True)
@@ -106,7 +108,7 @@ if advertiser_name:
         st.success(f"Returned {len(df)} records")
         st.dataframe(df, column_config={
             "Ad Url": st.column_config.LinkColumn()
-        })
+        }, use_container_width=True, height=400)
 
         csv = df.to_csv(index=False).encode("utf-8")
 
@@ -250,7 +252,7 @@ if meta_advertiser_name:
         df_meta = df_meta.sort_values("Start Date", ascending=False)
         st.dataframe(df_meta, column_config={
             "Ad Url": st.column_config.LinkColumn()
-        })
+        }, use_container_width=True, height=400)
         
         csv = df_meta.to_csv(index=False).encode("utf-8")
         st.download_button(
@@ -298,7 +300,7 @@ if x_advertiser_name:
         
         st.dataframe(df_x_filtered, column_config={
             "Ad Url": st.column_config.LinkColumn()
-        })
+        }, use_container_width=True, height=400)
         
         csv = df_x_filtered.to_csv(index=False).encode("utf-8")
         st.download_button(
