@@ -139,11 +139,11 @@ def expand_geography_search(geography_query):
     
     if query_lower in STATE_MAPPING:
         full_name = STATE_MAPPING[query_lower]
-        return f"({query_lower}|{full_name})"
-    
+        return f"(?:{query_lower}|{full_name})"
+
     for abbr, full_name in STATE_MAPPING.items():
         if query_lower == full_name:
-            return f"({abbr}|{full_name})"
+            return f"(?:{abbr}|{full_name})"
     
     return geography_query
 

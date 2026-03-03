@@ -10,6 +10,9 @@ from x_ads_scraper import download_and_extract_csv, filter_by_advertiser, standa
 
 st.set_page_config(layout="wide")
 
+# Cap rows sent to browser to stay under Streamlit's 200MB websocket limit
+DISPLAY_ROW_LIMIT = 10_000
+
 st.markdown("<h1 style='text-align: center;'>Political Ads Tracker</h1>", unsafe_allow_html=True)
 
 st.markdown("<h2 style='text-align: left;'><span style='color: #4285F4;'>G</span><span style='color: #EA4335;'>o</span><span style='color: #FBBC05;'>o</span><span style='color: #4285F4;'>g</span><span style='color: #EA4335;'>l</span><span style='color: #FBBC05;'>e</span></h2>", unsafe_allow_html=True)
@@ -162,10 +165,13 @@ if advertiser_name or google_geo:
         if df_filtered is None or df_filtered.empty:
             st.warning("No results match the filters")
         else:
-            st.markdown(f"**Showing {len(df_filtered)} of {len(df)} records**")
-            st.dataframe(df_filtered, column_config={
+            n_total = len(df_filtered)
+            df_show = df_filtered.head(DISPLAY_ROW_LIMIT)
+            cap_note = f" (first {DISPLAY_ROW_LIMIT:,} shown; download CSV for full data)" if n_total > DISPLAY_ROW_LIMIT else ""
+            st.markdown(f"**Showing {len(df_show)} of {n_total} records**{cap_note}")
+            st.dataframe(df_show, column_config={
                 "Ad Url": st.column_config.LinkColumn()
-            }, use_container_width=True, height=400)
+            }, height=400, use_container_width=True)
 
             csv = df_filtered.to_csv(index=False).encode("utf-8")
             st.download_button(
@@ -329,10 +335,13 @@ if meta_advertiser_name or meta_geo:
         if df_meta_filtered is None or df_meta_filtered.empty:
             st.warning("No results match the filters")
         else:
-            st.markdown(f"**Showing {len(df_meta_filtered)} of {len(df_meta)} records**")
-            st.dataframe(df_meta_filtered, column_config={
+            n_total = len(df_meta_filtered)
+            df_show = df_meta_filtered.head(DISPLAY_ROW_LIMIT)
+            cap_note = f" (first {DISPLAY_ROW_LIMIT:,} shown; download CSV for full data)" if n_total > DISPLAY_ROW_LIMIT else ""
+            st.markdown(f"**Showing {len(df_show)} of {n_total} records**{cap_note}")
+            st.dataframe(df_show, column_config={
                 "Ad Url": st.column_config.LinkColumn()
-            }, use_container_width=True, height=400)
+            }, height=400, use_container_width=True)
 
             csv = df_meta_filtered.to_csv(index=False).encode("utf-8")
             st.download_button(
@@ -399,10 +408,13 @@ if x_advertiser_name or x_geo:
         if df_x_display is None or df_x_display.empty:
             st.warning("No results match the filters")
         else:
-            st.markdown(f"**Showing {len(df_x_display)} of {len(df_x_filtered)} records**")
-            st.dataframe(df_x_display, column_config={
+            n_total = len(df_x_display)
+            df_show = df_x_display.head(DISPLAY_ROW_LIMIT)
+            cap_note = f" (first {DISPLAY_ROW_LIMIT:,} shown; download CSV for full data)" if n_total > DISPLAY_ROW_LIMIT else ""
+            st.markdown(f"**Showing {len(df_show)} of {n_total} records**{cap_note}")
+            st.dataframe(df_show, column_config={
                 "Ad Url": st.column_config.LinkColumn()
-            }, use_container_width=True, height=400)
+            }, height=400, use_container_width=True)
 
             csv = df_x_display.to_csv(index=False).encode("utf-8")
             st.download_button(
