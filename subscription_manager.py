@@ -1,7 +1,3 @@
-"""
-Subscription storage: Google Sheets only (shared by Streamlit app and notifier).
-Required for deployment: set SPREADSHEET_ID and GCP credentials in secrets/env.
-"""
 import json
 import os
 import uuid
@@ -16,20 +12,17 @@ SHEET_HEADERS = [
     "created_at", "last_notified_at", "last_seen_ad_ids",
 ]
 
-# Set from Streamlit app so st.secrets are used (Streamlit Cloud)
 _injected_spreadsheet_id = None
 _injected_gcp = None
 
 
 def set_sheets_config_from_app(spreadsheet_id: Optional[str], gcp_service_account: Optional[dict]):
-    """Call from Streamlit: set_sheets_config_from_app(st.secrets.get('spreadsheet_id'), st.secrets.get('gcp_service_account'))."""
     global _injected_spreadsheet_id, _injected_gcp
     _injected_spreadsheet_id = (spreadsheet_id or "").strip() or None
     _injected_gcp = gcp_service_account if isinstance(gcp_service_account, dict) else None
 
 
 def _get_sheets_config():
-    """Spreadsheet ID and GCP creds: injected (Streamlit) > env > .streamlit/secrets.toml."""
     spreadsheet_id = _injected_spreadsheet_id or os.environ.get("SPREADSHEET_ID", "").strip()
     gcp_secrets = _injected_gcp or {}
 
@@ -63,7 +56,6 @@ def _get_sheets_config():
 
 
 def is_sheets_configured() -> bool:
-    """True if SPREADSHEET_ID and GCP credentials are set (for deployment)."""
     _id, gcp = _get_sheets_config()
     return bool(_id and gcp)
 
@@ -149,12 +141,10 @@ def _ensure_sheet_headers():
 
 
 def load_subscriptions() -> dict:
-    """Load all subscriptions from Google Sheets. Raises if SPREADSHEET_ID/GCP not configured."""
     return _load_from_sheets()
 
 
 def save_subscriptions(subscriptions: dict):
-    """Persist subscriptions to Google Sheets."""
     _save_to_sheets(subscriptions)
 
 
@@ -164,7 +154,6 @@ def add_subscription(
     geography: str = "",
     platforms: list = None,
 ) -> Optional[str]:
-    """Add a new subscription. Returns the subscription ID, or None if duplicate."""
     subscriptions = load_subscriptions()
 
     for sub in subscriptions.values():
@@ -210,7 +199,6 @@ def update_last_seen(sub_id: str, ad_ids: list, timestamp: str):
     rows = sh.get_all_values()
     if not rows or rows[0] != SHEET_HEADERS:
         return
-    # Column A = id (index 0), G = last_notified_at (6), H = last_seen_ad_ids (7)
     for i in range(1, len(rows)):
         if len(rows[i]) > 0 and rows[i][0] == sub_id:
             row_num = i + 1  # 1-based
