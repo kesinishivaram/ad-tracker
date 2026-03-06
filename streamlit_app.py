@@ -10,10 +10,10 @@ from x_ads_scraper import download_and_extract_csv, filter_by_advertiser, standa
 
 st.set_page_config(layout="wide")
 
-# Cap rows sent to browser to stay under Streamlit's 200MB websocket limit
+# cap rows sent to browser to stay under Streamlit's 200MB websocket limit
 DISPLAY_ROW_LIMIT = 10_000
 
-st.markdown("<h1 style='text-align: center;'>Political Ads Tracker</h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align: center;'>Ads Tracker</h1>", unsafe_allow_html=True)
 
 st.markdown("<h2 style='text-align: left;'><span style='color: #4285F4;'>G</span><span style='color: #EA4335;'>o</span><span style='color: #FBBC05;'>o</span><span style='color: #4285F4;'>g</span><span style='color: #EA4335;'>l</span><span style='color: #FBBC05;'>e</span></h2>", unsafe_allow_html=True)
 
