@@ -17,7 +17,7 @@ def show_alerts_ui():
     st.markdown("## Email Alerts")
 
     st.markdown(
-        "Subscribe to receive an email notification whenever new political ads are detected."
+        "Subscribe to receive an email notification whenever new ads are detected."
     )
 
     with st.expander("Create a new alert", expanded=True):
